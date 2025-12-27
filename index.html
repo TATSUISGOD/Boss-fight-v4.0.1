@@ -1,0 +1,247 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8">
+<title>🔥 タップRPG 完全版 🔥</title>
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<style>
+body{background:#111;color:#fff;font-family:sans-serif;text-align:center;margin:0;padding:20px}
+button{font-size:18px;padding:14px 26px;margin:6px}
+#tapBtn{font-size:28px;padding:32px 64px;margin-top:20px}
+.hidden{display:none!important}
+.boss{font-size:80px}
+.player{font-size:60px;margin:10px}
+.hp-bar{width:80%;height:20px;background:#444;margin:10px auto;border-radius:10px;overflow:hidden}
+.hp{height:100%;background:red;transition:.1s}
+.overlay{position:fixed;inset:0;background:rgba(0,0,0,.9);display:flex;justify-content:center;align-items:center;z-index:999;font-size:26px;text-align:center;padding:20px}
+
+.rare{color:#4af}.sr{color:#c6f}.hr{color:#fa4}.ur{color:gold}
+.lr{
+background:linear-gradient(45deg,red,orange,yellow,green,cyan,blue,purple);
+-webkit-background-clip:text;color:transparent;font-weight:bold}
+
+@keyframes spin{
+0%{transform:scale(.3) rotate(0);opacity:0}
+100%{transform:scale(1) rotate(720deg);opacity:1}
+}
+.spin{font-size:80px;animation:spin 1s}
+</style>
+</head>
+
+<body>
+
+<h1>🔥 タップRPG 🔥</h1>
+
+<p>💰 <span id="coin">0</span>　💎 <span id="dia">0</span></p>
+<p>⚔ 攻撃力 +<span id="atk">0</span></p>
+
+<div class="player" id="player">🙂</div>
+
+<button onclick="drawGacha()">🎰 ガチャ(100)</button>
+<button onclick="drawDiaGacha()">💎 上位ガチャ</button>
+<button onclick="exchangeDia()">💰1000→💎1</button>
+<button onclick="showDex()">📖 図鑑</button>
+
+<hr>
+
+<button id="rushBtn" onclick="startRush()">🏆 ボスラッシュ</button>
+
+<div id="select">
+<h2>ボス選択</h2>
+<button onclick="startBattle('スライム',100,'🟢',100000000)">スライム</button>
+<button onclick="startBattle('オーク',300,'👹',20)">オーク</button>
+<button onclick="startBattle('ドラゴン',500,'🐉',50)">ドラゴン</button>
+<button onclick="startBattle('ゴーレム',1200,'🗿',120)">ゴーレム</button>
+<button onclick="startBattle('デーモン',2500,'😈',250)">デーモン</button>
+<button onclick="startBattle('神竜',5000,'🐲✨',500)">神竜</button>
+
+<hr>
+<h3>🔥 超高難度 🔥</h3>
+<button onclick="startBattle('カオスロード',50000,'💀',2000)">カオスロード</button>
+<button onclick="startBattle('虚無の王',200000,'🌌',8000)">虚無の王</button>
+<button onclick="startBattle('終焉の神',1000000,'🟥',50000)">終焉の神</button>
+</div>
+
+<div id="game" class="hidden">
+<h2 id="bossName"></h2>
+<div class="boss" id="bossIcon"></div>
+<div class="hp-bar"><div class="hp" id="hp"></div></div>
+<p>HP <span id="hpText"></span></p>
+<button id="tapBtn">タップ！</button>
+</div>
+
+<div id="overlay" class="overlay hidden"></div>
+
+<script>
+/* ===== データ完全引き継ぎ（最重要） ===== */
+let coin = Number(localStorage.getItem("coin")) || 0
+let dia  = Number(localStorage.getItem("dia"))  || 0
+
+let atk = 0
+const savedAtk = localStorage.getItem("atk")
+const oldAtk   = localStorage.getItem("atkBonus")
+
+if(savedAtk !== null && !isNaN(savedAtk)){
+  atk = Number(savedAtk)
+}else if(oldAtk !== null && !isNaN(oldAtk)){
+  atk = Number(oldAtk)
+  localStorage.setItem("atk", atk)
+  localStorage.removeItem("atkBonus")
+}else{
+  atk = 0
+}
+
+let dex = JSON.parse(localStorage.getItem("dex") || "{}")
+
+/* ===== 状態 ===== */
+let bossHp,maxHp,reward,start,taps
+let rush=false,rushCount=0,rushTimer
+
+/* ===== DOM ===== */
+const coinEl=document.getElementById("coin")
+const diaEl=document.getElementById("dia")
+const atkEl=document.getElementById("atk")
+const ov=document.getElementById("overlay")
+
+/* ===== 保存 ===== */
+function save(){
+localStorage.setItem("coin",coin)
+localStorage.setItem("dia",dia)
+localStorage.setItem("atk",atk)
+localStorage.setItem("dex",JSON.stringify(dex))
+coinEl.textContent=coin
+diaEl.textContent=dia
+atkEl.textContent=atk.toFixed(1)
+}
+
+/* ===== 見た目 ===== */
+function updatePlayer(){
+player.textContent =
+atk>=20 ? "👑🔥" :
+atk>=10 ? "😇✨" :
+atk>=5  ? "😎" : "🙂"
+}
+
+/* 初期反映（ここで初めて保存） */
+updatePlayer()
+save()
+
+/* ===== overlay ===== */
+function showO(h){
+ov.innerHTML=h+"<br><small>(タップで閉じる)</small>"
+ov.classList.remove("hidden")
+}
+ov.onclick=()=>ov.classList.add("hidden")
+
+/* ===== ガチャ ===== */
+function roll(tbl){
+ov.classList.remove("hidden")
+ov.innerHTML=`<div class="spin">🎰</div>`
+setTimeout(()=>{
+let r=Math.random()*100,s=0
+for(let g of tbl){
+s+=g[1]
+if(r<s){
+atk+=g[2]
+dex[g[0]]=(dex[g[0]]||0)+1
+updatePlayer()
+save()
+ov.innerHTML=`<div class="${g[3]}">✨${g[0]}✨<br>攻撃力+${g[2]}</div>`
+return
+}}
+},1000)
+}
+
+function drawGacha(){
+if(coin<100)return showO("コイン不足")
+coin-=100;save()
+roll([
+["レジェンド",2,1.5,"lr"],
+["ウルトラ",5,1,"ur"],
+["ハイパー",15,.5,"hr"],
+["スーパー",28,.3,"sr"],
+["レア",50,.1,"rare"]
+])
+}
+
+function drawDiaGacha(){
+if(dia<1)return showO("ダイヤ不足")
+dia--;save()
+roll([
+["レジェンド",40,2,"lr"],
+["ウルトラ",45,1.5,"ur"],
+["ディバイン",15,10,"hr"]
+])
+}
+
+function exchangeDia(){
+if(coin<1000)return showO("不足")
+coin-=1000;dia++;save()
+showO("💎 +1")
+}
+
+function showDex(){
+let h="<h2>📖 図鑑</h2>"
+for(let k in dex)h+=`${k} ×${dex[k]}<br>`
+showO(h)
+}
+
+/* ===== バトル ===== */
+function startBattle(n,h,i,r){
+rush=false
+bossHp=maxHp=h;reward=r;taps=0;start=Date.now()
+bossName.textContent=n
+bossIcon.textContent=i
+select.classList.add("hidden")
+game.classList.remove("hidden")
+upd()
+}
+
+function startRush(){
+rush=true;rushCount=0
+document.getElementById("rushBtn").classList.add("hidden")
+document.getElementById("select").classList.add("hidden")
+showO("🏆 ボスラッシュ開始！")
+rushTimer=setTimeout(endRush,60000)
+nextRush()
+}
+
+function nextRush(){
+let hp=800 + rushCount*600
+startBattle("ラッシュボス"+(rushCount+1),hp,"👾",0)
+}
+
+function endRush(){
+rush=false
+game.classList.add("hidden")
+select.classList.remove("hidden")
+document.getElementById("rushBtn").classList.remove("hidden")
+let rewardCoin=rushCount*300
+coin+=rewardCoin
+save()
+showO(`🏆 終了！<br>${rushCount}体撃破<br>💰 +${rewardCoin}`)
+}
+
+tapBtn.onclick=()=>{
+taps++
+let dmg=1+atk+(taps%10===0?1:0)
+bossHp=Math.max(0,bossHp-dmg)
+upd()
+if(bossHp===0){
+if(rush){rushCount++;nextRush();return}
+let t=((Date.now()-start)/1000).toFixed(2)
+coin+=reward
+save()
+game.classList.add("hidden")
+select.classList.remove("hidden")
+showO(`🎉 撃破！<br>${t}s`)
+}
+}
+
+function upd(){
+hpText.textContent=Math.ceil(bossHp)
+hp.style.width=(bossHp/maxHp*100)+"%"
+}
+</script>
+</body>
+</html>
